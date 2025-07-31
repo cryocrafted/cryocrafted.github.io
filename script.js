@@ -14,6 +14,7 @@ class GameTracker {
         this.loadData();
         this.bindEvents();
         this.setupDropZones();
+        this.setupModal();
         this.render();
     }
 
@@ -21,8 +22,30 @@ class GameTracker {
         const gameInput = document.getElementById('gameInput');
         const addBtn = document.getElementById('addGameBtn');
         const tableSelect = document.getElementById('tableSelect');
+        const exportBtn = document.getElementById('exportBtn');
+        const importBtn = document.getElementById('importBtn');
+        const importFile = document.getElementById('importFile');
 
         addBtn.addEventListener('click', () => this.addGame());
+        exportBtn.addEventListener('click', () => this.exportData());
+        importBtn.addEventListener('click', () => importFile.click());
+        
+        importFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const success = this.importData(event.target.result);
+                    if (success) {
+                        this.showAlert('Import Successful', 'Game data imported successfully!');
+                    } else {
+                        this.showAlert('Import Failed', 'Failed to import game data. Please check the file format.');
+                    }
+                };
+                reader.readAsText(file);
+            }
+            e.target.value = '';
+        });
         
         gameInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -37,6 +60,77 @@ class GameTracker {
         addBtn.disabled = !gameInput.value.trim();
     }
 
+    setupModal() {
+        const modal = document.getElementById('customModal');
+        const modalCancel = document.getElementById('modalCancel');
+        const modalConfirm = document.getElementById('modalConfirm');
+
+        modalCancel.addEventListener('click', () => {
+            this.closeModal(false);
+        });
+
+        modalConfirm.addEventListener('click', () => {
+            this.closeModal(true);
+        });
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeModal(false);
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.classList.contains('show')) {
+                this.closeModal(false);
+            }
+        });
+    }
+
+    showConfirm(title, message, onConfirm, onCancel = null) {
+        const modal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalCancel = document.getElementById('modalCancel');
+
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modalCancel.style.display = 'inline-block';
+
+        this.modalCallback = { onConfirm, onCancel };
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    showAlert(title, message, onOk = null) {
+        const modal = document.getElementById('customModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalMessage = document.getElementById('modalMessage');
+        const modalCancel = document.getElementById('modalCancel');
+
+        modalTitle.textContent = title;
+        modalMessage.textContent = message;
+        modalCancel.style.display = 'none';
+
+        this.modalCallback = { onConfirm: onOk, onCancel: null };
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    closeModal(confirmed) {
+        const modal = document.getElementById('customModal');
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+
+        if (this.modalCallback) {
+            if (confirmed && this.modalCallback.onConfirm) {
+                this.modalCallback.onConfirm();
+            } else if (!confirmed && this.modalCallback.onCancel) {
+                this.modalCallback.onCancel();
+            }
+            this.modalCallback = null;
+        }
+    }
+
     addGame() {
         const gameInput = document.getElementById('gameInput');
         const tableSelect = document.getElementById('tableSelect');
@@ -48,7 +142,7 @@ class GameTracker {
 
         const allGames = [...this.games.toPlay, ...this.games.completed, ...this.games.finished, ...this.games.waiting];
         if (allGames.some(game => game.name.toLowerCase() === gameName.toLowerCase())) {
-            alert('This game is already in your tracker!');
+            this.showAlert('Duplicate Game', 'This game is already in your tracker!');
             return;
         }
 
@@ -73,11 +167,15 @@ class GameTracker {
     }
 
     deleteGame(gameId, fromTable) {
-        if (confirm('Are you sure you want to delete this game?')) {
-            this.games[fromTable] = this.games[fromTable].filter(game => game.id !== gameId);
-            this.saveData();
-            this.render();
-        }
+        this.showConfirm(
+            'Delete Game',
+            'Are you sure you want to do this? It can\'t be undone but you can just add it again if you want, I\'m not the boss of you.',
+            () => {
+                this.games[fromTable] = this.games[fromTable].filter(game => game.id !== gameId);
+                this.saveData();
+                this.render();
+            }
+        );
     }
 
     updateGameCompletion(gameId, table, completion) {
@@ -137,7 +235,10 @@ class GameTracker {
             
             const releaseInfo = this.calculateDaysUntilRelease(game.releaseDate);
             
-            if (releaseInfo.isYearOnly) {
+            if (releaseInfo.isUnknown) {
+                countdown.textContent = 'Unknown';
+                countdown.classList.add('unknown');
+            } else if (releaseInfo.isYearOnly) {
                 if (releaseInfo.yearsUntil === 0) {
                     countdown.textContent = 'Soon™';
                     countdown.classList.add('soon', 'soon-tm');
@@ -185,20 +286,21 @@ class GameTracker {
         input.type = 'text';
         input.className = 'release-date-input';
         input.value = game.releaseDate || '';
-        input.placeholder = 'YYYY-MM-DD or YYYY';
-        input.title = 'Enter release date (YYYY-MM-DD) or just year (YYYY)';
+        input.placeholder = 'YYYY-MM-DD, YYYY, or Unknown';
+        input.title = 'Enter release date (YYYY-MM-DD), just year (YYYY), or "Unknown"';
 
         const submitDate = () => {
             const value = input.value.trim();
             
             if (value && this.isValidDateInput(value) && value !== game.releaseDate) {
-                this.updateGameReleaseDate(game.id, table, value);
+                const normalizedValue = value.toLowerCase() === 'unknown' ? 'Unknown' : value;
+                this.updateGameReleaseDate(game.id, table, normalizedValue);
                 this.render();
             } else if (!value && game.releaseDate) {
                 this.updateGameReleaseDate(game.id, table, '');
                 this.render();
             } else if (value && !this.isValidDateInput(value)) {
-                alert('Please enter a valid date format: YYYY-MM-DD or just YYYY');
+                this.showAlert('Invalid Date Format', 'Please enter a valid date format: YYYY-MM-DD, YYYY, or "Unknown"');
                 input.value = game.releaseDate || '';
             }
         };
@@ -216,6 +318,10 @@ class GameTracker {
     }
 
     isValidDateInput(value) {
+        if (value && value.toLowerCase() === 'unknown') {
+            return true;
+        }
+        
         if (/^\d{4}$/.test(value)) {
             const year = parseInt(value);
             return year >= 1900 && year <= 2100;
@@ -234,6 +340,10 @@ class GameTracker {
     }
 
     calculateDaysUntilRelease(releaseDate) {
+        if (releaseDate && releaseDate.toLowerCase() === 'unknown') {
+            return { isUnknown: true };
+        }
+        
         if (this.isYearOnly(releaseDate)) {
             const currentYear = new Date().getFullYear();
             const releaseYear = parseInt(releaseDate);
@@ -539,7 +649,40 @@ class GameTracker {
     renderTable(tableKey, bodyId, emptyId, showOrder) {
         const tbody = document.getElementById(bodyId);
         const emptyDiv = document.getElementById(emptyId);
-        const games = this.games[tableKey];
+        let games = this.games[tableKey];
+
+        if (tableKey === 'waiting') {
+            games = [...games].sort((a, b) => {
+                if (!a.releaseDate && !b.releaseDate) return 0;
+                if (!a.releaseDate) return 1;
+                if (!b.releaseDate) return -1;
+                
+                const aTimeInfo = this.calculateDaysUntilRelease(a.releaseDate);
+                const bTimeInfo = this.calculateDaysUntilRelease(b.releaseDate);
+                
+                if (aTimeInfo.isUnknown && bTimeInfo.isUnknown) return 0;
+                if (aTimeInfo.isUnknown) return 1;
+                if (bTimeInfo.isUnknown) return -1;
+                
+                if (!aTimeInfo.isYearOnly && !bTimeInfo.isYearOnly) {
+                    return aTimeInfo.days - bTimeInfo.days;
+                }
+                
+                if (!aTimeInfo.isYearOnly && bTimeInfo.isYearOnly) {
+                    return -1;
+                }
+                
+                if (aTimeInfo.isYearOnly && !bTimeInfo.isYearOnly) {
+                    return 1;
+                }
+                
+                if (aTimeInfo.isYearOnly && bTimeInfo.isYearOnly) {
+                    return aTimeInfo.yearsUntil - bTimeInfo.yearsUntil;
+                }
+                
+                return 0;
+            });
+        }
 
         tbody.innerHTML = '';
 
@@ -693,9 +836,13 @@ document.addEventListener('keydown', (e) => {
 window.exportGameData = () => window.gameTracker.exportData();
 window.getGameStats = () => window.gameTracker.getStats();
 window.clearAllGames = () => {
-    if (confirm('Are you sure you want to clear ALL games? This cannot be undone!')) {
-        window.gameTracker.games = { toPlay: [], completed: [], finished: [], waiting: [] };
-        window.gameTracker.saveData();
-        window.gameTracker.render();
-    }
+    window.gameTracker.showConfirm(
+        'Clear All Games',
+        'Are you sure you want to clear ALL games? This action cannot be undone!',
+        () => {
+            window.gameTracker.games = { toPlay: [], completed: [], finished: [], waiting: [] };
+            window.gameTracker.saveData();
+            window.gameTracker.render();
+        }
+    );
 };

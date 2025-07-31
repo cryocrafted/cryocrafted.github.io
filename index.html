@@ -24,6 +24,9 @@
                     <option value="waiting">Waiting for Release</option>
                 </select>
                 <button id="addGameBtn">Add Game</button>
+                <button id="exportBtn">Export</button>
+                <button id="importBtn">Import</button>
+                <input type="file" id="importFile" accept=".json" style="display: none;">
             </div>
         </header>
 
@@ -117,6 +120,21 @@
         <footer>
             <p>I'm saving it locally in your browser cos that's easier with GitHub innit.</p>
         </footer>
+    </div>
+
+    <div id="customModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Confirm</h3>
+            </div>
+            <div class="modal-body">
+                <p id="modalMessage">Are you sure?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="modalCancel" class="modal-btn modal-btn-secondary">Cancel</button>
+                <button id="modalConfirm" class="modal-btn modal-btn-primary">OK</button>
+            </div>
+        </div>
     </div>
 
     <script src="script.js"></script>
