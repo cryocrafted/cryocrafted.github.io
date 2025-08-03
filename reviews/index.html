@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reviews - POTUDE</title>
+    <link rel="icon" type="image/png" href="../favicon.png">
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <img src="../favicon.png" alt="Logo" class="sidebar-logo">
+            <h3>POTUDE</h3>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="../index.html" class="sidebar-link">
+                <span>Home</span>
+            </a>
+            <a href="index.html" class="sidebar-link active">
+                <span>Reviews</span>
+            </a>
+        </nav>
+    </div>
+
+    <button id="sidebarToggle" class="sidebar-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div class="main-content">
+        <div class="container">
+            <header>
+                <h1>
+                    <img src="../favicon.png" alt="Logo" class="title-icon title-icon-left">
+                    <span id="titleText">Game Reviews</span>
+                    <img src="../favicon.png" alt="Logo" class="title-icon title-icon-right">
+                </h1>
+                <div class="reviews-info">
+                    <p>Just drag things from the To Be Reviewed section to the Reviewed section to add your ratings and thoughts.</p>
+                </div>
+            </header>
+
+            <main class="reviews-container">
+                <div class="review-section">
+                    <h2>To Be Reviewed</h2>
+                    <div class="review-box" id="toBeReviewedBox">
+                        <div class="games-grid" id="toBeReviewedGames">
+                        </div>
+                        <div class="empty-state show" id="toBeReviewedEmpty">
+                            <p>Add games to your Finished section to review them.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-section">
+                    <h2>Reviewed</h2>
+                    <div class="review-search-container">
+                        <input type="text" id="reviewSearch" placeholder="Search your reviews by game name..." class="review-search-input">
+                        <div class="search-icon">🔍</div>
+                    </div>
+                    <div class="review-box" id="reviewedBox">
+                        <div class="reviewed-games" id="reviewedGames">
+                        </div>
+                        <div class="empty-state show" id="reviewedEmpty">
+                            <p>No reviews yet. Finish some games already.</p>
+                        </div>
+                        <div class="no-search-results" id="noSearchResults">
+                            <p>You probably didn't review that game, or you did and I fucked up.</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+            <footer>
+                <p>Your reviews are also saved locally in your browser, innit.</p>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        class ReviewTracker {
+            constructor() {
+                this.reviews = this.loadReviews();
+                this.init();
+            }
+
+            init() {
+                this.setupSidebar();
+                this.loadFinishedGames();
+                this.renderReviews();
+                this.setupDragAndDrop();
+                this.setupSearch();
+            }
+
+            setupSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                const sidebarToggle = document.getElementById('sidebarToggle');
+                const mainContent = document.querySelector('.main-content');
+
+                sidebarToggle.addEventListener('click', () => {
+                    sidebar.classList.toggle('open');
+                    sidebarToggle.classList.toggle('active');
+                    mainContent.classList.toggle('shifted');
+                });
+
+                document.addEventListener('click', (event) => {
+                    if (window.innerWidth <= 768) {
+                        if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
+                            sidebar.classList.remove('open');
+                            sidebarToggle.classList.remove('active');
+                            mainContent.classList.remove('shifted');
+                        }
+                    }
+                });
+            }
+
+            loadFinishedGames() {
+                const trackerData = localStorage.getItem('gameTracker');
+                const finishedGames = trackerData ? JSON.parse(trackerData).finished || [] : [];
+                
+                const toBeReviewedContainer = document.getElementById('toBeReviewedGames');
+                const toBeReviewedEmpty = document.getElementById('toBeReviewedEmpty');
+                
+                toBeReviewedContainer.innerHTML = '';
+                
+                const unreviewed = finishedGames.filter(game => 
+                    !this.reviews.some(review => review.name === game.name)
+                );
+
+                if (unreviewed.length === 0) {
+                    toBeReviewedEmpty.classList.add('show');
+                } else {
+                    toBeReviewedEmpty.classList.remove('show');
+                    
+                    unreviewed.forEach(game => {
+                        const gameCard = document.createElement('div');
+                        gameCard.className = 'game-card';
+                        gameCard.draggable = true;
+                        gameCard.dataset.gameName = game.name;
+                        gameCard.dataset.completion = game.completion || '100';
+                        gameCard.innerHTML = `
+                            <div class="game-card-name">${game.name}</div>
+                            <div class="game-card-completion">${game.completion || '100'}% Complete</div>
+                        `;
+                        toBeReviewedContainer.appendChild(gameCard);
+                    });
+                }
+            }
+
+            setupDragAndDrop() {
+                const reviewedBox = document.getElementById('reviewedBox');
+                
+                document.addEventListener('dragstart', (e) => {
+                    if (e.target.classList.contains('game-card')) {
+                        e.dataTransfer.setData('text/plain', JSON.stringify({
+                            name: e.target.dataset.gameName,
+                            completion: e.target.dataset.completion
+                        }));
+                        e.target.classList.add('dragging');
+                    }
+                });
+                
+                document.addEventListener('dragend', (e) => {
+                    if (e.target.classList.contains('game-card')) {
+                        e.target.classList.remove('dragging');
+                    }
+                });
+                
+                reviewedBox.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    reviewedBox.classList.add('drag-over');
+                });
+                
+                reviewedBox.addEventListener('dragleave', (e) => {
+                    if (!reviewedBox.contains(e.relatedTarget)) {
+                        reviewedBox.classList.remove('drag-over');
+                    }
+                });
+                
+                reviewedBox.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    reviewedBox.classList.remove('drag-over');
+                    
+                    const gameData = JSON.parse(e.dataTransfer.getData('text/plain'));
+                    this.showReviewModal(gameData);
+                });
+            }
+
+            showReviewModal(gameData) {
+                const modal = document.createElement('div');
+                modal.className = 'modal-overlay show';
+                modal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>Review: ${gameData.name}</h3>
+                        </div>
+                        <div class="modal-body">
+                            <div class="review-form">
+                                <div class="form-group">
+                                    <label>Rating:</label>
+                                    <select id="reviewRating">
+                                        <option value="5">⭐⭐⭐⭐⭐ (5/5)</option>
+                                        <option value="4.5">⭐⭐⭐⭐⭐ (4.5/5)</option>
+                                        <option value="4">⭐⭐⭐⭐☆ (4/5)</option>
+                                        <option value="3.5">⭐⭐⭐⭐☆ (3.5/5)</option>
+                                        <option value="3">⭐⭐⭐☆☆ (3/5)</option>
+                                        <option value="2.5">⭐⭐⭐☆☆ (2.5/5)</option>
+                                        <option value="2">⭐⭐☆☆☆ (2/5)</option>
+                                        <option value="1.5">⭐⭐☆☆☆ (1.5/5)</option>
+                                        <option value="1">⭐☆☆☆☆ (1/5)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Playtime (hours):</label>
+                                    <input type="number" id="reviewHours" min="0" max="9999" placeholder="0" />
+                                </div>
+                                <div class="form-group">
+                                    <label>Review:</label>
+                                    <textarea id="reviewText" placeholder="Write your thoughts about this game..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button id="modalCancel" class="modal-btn modal-btn-secondary">Cancel</button>
+                            <button id="modalSave" class="modal-btn modal-btn-primary">Save Review</button>
+                        </div>
+                    </div>
+                `;
+                
+                document.body.appendChild(modal);
+                
+                document.getElementById('modalCancel').addEventListener('click', () => {
+                    modal.remove();
+                });
+                
+                document.getElementById('modalSave').addEventListener('click', () => {
+                    const rating = document.getElementById('reviewRating').value;
+                    const hours = document.getElementById('reviewHours').value;
+                    const reviewText = document.getElementById('reviewText').value;
+                    
+                    this.addReview({
+                        name: gameData.name,
+                        completion: gameData.completion,
+                        rating: parseFloat(rating),
+                        hours: parseInt(hours) || 0,
+                        review: reviewText,
+                        dateAdded: new Date().toISOString()
+                    });
+                    
+                    modal.remove();
+                });
+            }
+
+            addReview(reviewData) {
+                this.reviews.push(reviewData);
+                this.saveReviews();
+                this.loadFinishedGames();
+                this.renderReviews();
+            }
+
+            renderReviews(searchTerm = '') {
+                const reviewedContainer = document.getElementById('reviewedGames');
+                const reviewedEmpty = document.getElementById('reviewedEmpty');
+                const noSearchResults = document.getElementById('noSearchResults');
+                
+                reviewedContainer.innerHTML = '';
+                
+                const filteredReviews = searchTerm 
+                    ? this.reviews.filter(review => 
+                        review.name.toLowerCase().includes(searchTerm.toLowerCase())
+                    )
+                    : this.reviews;
+                
+                if (this.reviews.length === 0) {
+                    reviewedEmpty.classList.add('show');
+                    noSearchResults.classList.remove('show');
+                } else if (filteredReviews.length === 0 && searchTerm) {
+                    reviewedEmpty.classList.remove('show');
+                    noSearchResults.classList.add('show');
+                } else {
+                    reviewedEmpty.classList.remove('show');
+                    noSearchResults.classList.remove('show');
+                    
+                    filteredReviews.forEach((review, index) => {
+                        const originalIndex = this.reviews.indexOf(review);
+                        const reviewCard = document.createElement('div');
+                        reviewCard.className = 'reviewed-game-card';
+                        reviewCard.dataset.reviewIndex = originalIndex;
+                        
+                        const stars = '⭐'.repeat(Math.floor(review.rating)) + 
+                                    (review.rating % 1 ? '⭐' : '') + 
+                                    '☆'.repeat(5 - Math.ceil(review.rating));
+                        
+                        let highlightedName = review.name;
+                        
+                        if (searchTerm) {
+                            const regex = new RegExp(`(${searchTerm})`, 'gi');
+                            highlightedName = review.name.replace(regex, '<mark class="search-highlight">$1</mark>');
+                        }
+                        
+                        reviewCard.innerHTML = `
+                            <div class="review-header">
+                                <div class="review-game-info">
+                                    <span class="review-game-name">${highlightedName}</span>
+                                    <span class="review-hours">${review.hours} hrs</span>
+                                </div>
+                                <div class="review-rating">${review.rating} ${stars}</div>
+                                <button class="review-delete" onclick="reviewTracker.deleteReview(${originalIndex})">×</button>
+                            </div>
+                            <div class="review-text">${review.review}</div>
+                        `;
+                        
+                        reviewedContainer.appendChild(reviewCard);
+                    });
+                }
+            }
+
+            deleteReview(index) {
+                this.reviews.splice(index, 1);
+                this.saveReviews();
+                this.loadFinishedGames();
+                this.renderReviews();
+            }
+
+            loadReviews() {
+                const saved = localStorage.getItem('gameReviews');
+                return saved ? JSON.parse(saved) : [];
+            }
+
+            saveReviews() {
+                localStorage.setItem('gameReviews', JSON.stringify(this.reviews));
+            }
+
+            setupSearch() {
+                const searchInput = document.getElementById('reviewSearch');
+                if (!searchInput) return;
+
+                searchInput.addEventListener('input', (e) => {
+                    const searchTerm = e.target.value.trim();
+                    this.renderReviews(searchTerm);
+                });
+
+                searchInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        searchInput.value = '';
+                        this.renderReviews('');
+                    }
+                });
+            }
+        }
+
+        let reviewTracker;
+        document.addEventListener('DOMContentLoaded', () => {
+            reviewTracker = new ReviewTracker();
+        });
+    </script>
+</body>
+</html>

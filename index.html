@@ -8,14 +8,37 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="container">
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <img src="favicon.png" alt="Logo" class="sidebar-logo">
+            <h3>POTUDE</h3>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="index.html" class="sidebar-link active">
+                <span>Home</span>
+            </a>
+            <a href="reviews/index.html" class="sidebar-link">
+                <span>Reviews</span>
+            </a>
+        </nav>
+    </div>
+
+    <button id="sidebarToggle" class="sidebar-toggle">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div class="main-content">
+        <div class="container">
         <header>
             <h1>
                 <img src="favicon.png" alt="Logo" class="title-icon title-icon-left">
-                Play Order Tracker Ultimate Deluxe Edition
+                <span id="titleText">Play Order Tracker Ultimate Deluxe Edition</span>
                 <img src="favicon.png" alt="Logo" class="title-icon title-icon-right">
             </h1>
             <div class="add-game-section">
+                <button id="helpBtn" class="help-btn" title="What am I doing?">?</button>
                 <input type="text" id="gameInput" placeholder="Enter game name..." maxlength="100">
                 <select id="tableSelect">
                     <option value="toPlay">To Play</option>
@@ -23,6 +46,11 @@
                     <option value="finished">Finished</option>
                     <option value="waiting">Waiting for Release</option>
                 </select>
+                <div class="image-upload-container">
+                    <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                    <button id="imageBtn" class="image-upload-btn">Add Banner</button>
+                    <span id="imageStatus" class="image-status"></span>
+                </div>
                 <button id="addGameBtn">Add Game</button>
                 <button id="exportBtn">Export</button>
                 <button id="importBtn">Import</button>
@@ -44,7 +72,6 @@
                             </tr>
                         </thead>
                         <tbody id="toPlayBody">
-                            <!-- add da games here-->
                         </tbody>
                     </table>
                     <div class="empty-state" id="toPlayEmpty">
@@ -65,7 +92,6 @@
                             </tr>
                         </thead>
                         <tbody id="completedBody">
-                            <!-- add da games here-->
                         </tbody>
                     </table>
                     <div class="empty-state" id="completedEmpty">
@@ -86,7 +112,6 @@
                             </tr>
                         </thead>
                         <tbody id="finishedBody">
-                            <!-- add da games here-->
                         </tbody>
                     </table>
                     <div class="empty-state" id="finishedEmpty">
@@ -107,7 +132,6 @@
                             </tr>
                         </thead>
                         <tbody id="waitingBody">
-                            <!-- add da games here-->
                         </tbody>
                     </table>
                     <div class="empty-state" id="waitingEmpty">
@@ -122,7 +146,7 @@
         </footer>
     </div>
 
-    <div id="customModal" class="modal-overlay">
+        <div id="customModal" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modalTitle">Confirm</h3>
@@ -133,6 +157,24 @@
             <div class="modal-footer">
                 <button id="modalCancel" class="modal-btn modal-btn-secondary">Cancel</button>
                 <button id="modalConfirm" class="modal-btn modal-btn-primary">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="helpModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>What am I doing?</h3>
+            </div>
+            <div class="modal-body">
+                <p>Welcome to POTUDE. It's a neat little tracker all stored locally to you as I do not care about your data at all. Enter a game name, choose a section to place it in and if you want, you can add a banner too to make it even prettier. (2MB file limit.)</p>
+                <br>
+                <p>On the left, you have a sidebar with this page and a reviews page if you want to review the games you've added to your finished tab. (You can click and drag games around where you need them!)</p>
+                <br>
+                <p>I'll be updating this with whatever neat things I can think of. Thanks for using it.</p>
+            </div>
+            <div class="modal-footer">
+                <button id="helpClose" class="modal-btn modal-btn-primary">Got it!</button>
             </div>
         </div>
     </div>

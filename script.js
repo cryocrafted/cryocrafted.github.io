@@ -6,16 +6,23 @@ class GameTracker {
             finished: [],
             waiting: []
         };
+        this.currentGameImage = null; // Store uploaded image data
 
         this.init();
     }
 
     init() {
+        console.log('GameTracker: Starting initialization...');
         this.loadData();
+        console.log('GameTracker: Data loaded, games:', this.games);
         this.bindEvents();
         this.setupDropZones();
         this.setupModal();
+        this.setupTitleEasterEgg();
+        this.setupSidebar();
+        console.log('GameTracker: About to render...');
         this.render();
+        console.log('GameTracker: Initialization complete');
     }
 
     bindEvents() {
@@ -25,10 +32,15 @@ class GameTracker {
         const exportBtn = document.getElementById('exportBtn');
         const importBtn = document.getElementById('importBtn');
         const importFile = document.getElementById('importFile');
+        const imageBtn = document.getElementById('imageBtn');
+        const imageInput = document.getElementById('imageInput');
+        const helpBtn = document.getElementById('helpBtn');
 
         addBtn.addEventListener('click', () => this.addGame());
         exportBtn.addEventListener('click', () => this.exportData());
         importBtn.addEventListener('click', () => importFile.click());
+        imageBtn.addEventListener('click', () => imageInput.click());
+        helpBtn.addEventListener('click', () => this.showHelp());
         
         importFile.addEventListener('change', (e) => {
             const file = e.target.files[0];
@@ -37,9 +49,9 @@ class GameTracker {
                 reader.onload = (event) => {
                     const success = this.importData(event.target.result);
                     if (success) {
-                        this.showAlert('Import Successful', 'Game data imported successfully!');
+                        this.showAlert('Import Successful', 'Game data and reviews imported successfully!');
                     } else {
-                        this.showAlert('Import Failed', 'Failed to import game data. Please check the file format.');
+                        this.showAlert('Import Failed', 'Failed to import data. Please check the file format.');
                     }
                 };
                 reader.readAsText(file);
@@ -57,7 +69,151 @@ class GameTracker {
             addBtn.disabled = !gameInput.value.trim();
         });
 
+        // Image upload handling
+        imageInput.addEventListener('change', (e) => {
+            this.handleImageUpload(e);
+        });
+
         addBtn.disabled = !gameInput.value.trim();
+    }
+
+    setupSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const mainContent = document.querySelector('.main-content');
+
+        if (!sidebar || !sidebarToggle || !mainContent) return;
+
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('open');
+            sidebarToggle.classList.toggle('active');
+            mainContent.classList.toggle('shifted');
+        });
+
+        // Close sidebar when clicking outside (on mobile)
+        document.addEventListener('click', (event) => {
+            if (window.innerWidth <= 768) {
+                if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
+                    sidebar.classList.remove('open');
+                    sidebarToggle.classList.remove('active');
+                    mainContent.classList.remove('shifted');
+                }
+            }
+        });
+
+        // Close sidebar on window resize if needed
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                sidebar.classList.remove('open');
+                sidebarToggle.classList.remove('active');
+                mainContent.classList.remove('shifted');
+            }
+        });
+    }
+
+    handleImageUpload(event) {
+        const file = event.target.files[0];
+        const imageStatus = document.getElementById('imageStatus');
+        const imageBtn = document.getElementById('imageBtn');
+        
+        if (!file) {
+            this.currentGameImage = null;
+            imageStatus.textContent = '';
+            imageBtn.classList.remove('has-image');
+            return;
+        }
+
+        // Check file size (max 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            imageStatus.textContent = 'Image too large';
+            imageStatus.className = 'image-status error';
+            this.currentGameImage = null;
+            imageBtn.classList.remove('has-image');
+            return;
+        }
+
+        // Check if it's an image
+        if (!file.type.startsWith('image/')) {
+            imageStatus.textContent = 'Not an image';
+            imageStatus.className = 'image-status error';
+            this.currentGameImage = null;
+            imageBtn.classList.remove('has-image');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            this.currentGameImage = e.target.result;
+            imageStatus.textContent = file.name;
+            imageStatus.className = 'image-status success';
+            imageBtn.classList.add('has-image');
+        };
+        reader.onerror = () => {
+            imageStatus.textContent = 'Upload failed';
+            imageStatus.className = 'image-status error';
+            this.currentGameImage = null;
+            imageBtn.classList.remove('has-image');
+        };
+        reader.readAsDataURL(file);
+    }
+
+    showHelp() {
+        const helpModal = document.getElementById('helpModal');
+        const helpClose = document.getElementById('helpClose');
+        
+        helpModal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+        
+        const closeHelp = () => {
+            helpModal.classList.remove('show');
+            document.body.style.overflow = '';
+        };
+        
+        helpClose.addEventListener('click', closeHelp);
+        
+        helpModal.addEventListener('click', (e) => {
+            if (e.target === helpModal) {
+                closeHelp();
+            }
+        });
+        
+        // Close on Escape key
+        const handleEscape = (e) => {
+            if (e.key === 'Escape' && helpModal.classList.contains('show')) {
+                closeHelp();
+                document.removeEventListener('keydown', handleEscape);
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+    }
+
+    setupTitleEasterEgg() {
+        const titleElement = document.querySelector('header h1');
+        const titleTextElement = document.getElementById('titleText');
+        const originalTitleText = titleTextElement.textContent;
+        let hoverTimer = null;
+        let isEasterEggActive = false;
+
+        titleElement.addEventListener('mouseenter', () => {
+            if (isEasterEggActive) return;
+            
+            hoverTimer = setTimeout(() => {
+                isEasterEggActive = true;
+                titleTextElement.textContent = 'BOYA DEMANDS YOU MOVE THE MOUSE';
+            }, 5000);
+        });
+
+        titleElement.addEventListener('mouseleave', () => {
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
+            }
+            
+            if (isEasterEggActive) {
+                titleTextElement.textContent = originalTitleText;
+                isEasterEggActive = false;
+            }
+        });
     }
 
     setupModal() {
@@ -150,7 +306,8 @@ class GameTracker {
             id: Date.now() + Math.random(),
             name: gameName,
             dateAdded: new Date().toISOString(),
-            completion: 0
+            completion: 0,
+            bannerImage: this.currentGameImage // Add banner image data
         };
 
         if (targetTable === 'waiting') {
@@ -160,10 +317,29 @@ class GameTracker {
         this.games[targetTable].push(newGame);
         
         gameInput.value = '';
+        this.clearImageUpload();
         document.getElementById('addGameBtn').disabled = true;
         
         this.saveData();
         this.render();
+    }
+
+    clearImageUpload() {
+        this.currentGameImage = null;
+        const imageStatus = document.getElementById('imageStatus');
+        const imageBtn = document.getElementById('imageBtn');
+        const imageInput = document.getElementById('imageInput');
+        
+        if (imageStatus) {
+            imageStatus.textContent = '';
+            imageStatus.className = 'image-status';
+        }
+        if (imageBtn) {
+            imageBtn.classList.remove('has-image');
+        }
+        if (imageInput) {
+            imageInput.value = '';
+        }
     }
 
     deleteGame(gameId, fromTable) {
@@ -640,16 +816,28 @@ class GameTracker {
     }
 
     render() {
+        console.log('GameTracker: Starting render...');
         this.renderTable('toPlay', 'toPlayBody', 'toPlayEmpty', true);
         this.renderTable('completed', 'completedBody', 'completedEmpty', false);
         this.renderTable('finished', 'finishedBody', 'finishedEmpty', false);
         this.renderTable('waiting', 'waitingBody', 'waitingEmpty', false);
+        console.log('GameTracker: Render complete');
     }
 
     renderTable(tableKey, bodyId, emptyId, showOrder) {
+        console.log(`GameTracker: Rendering table ${tableKey}, games:`, this.games[tableKey]);
         const tbody = document.getElementById(bodyId);
         const emptyDiv = document.getElementById(emptyId);
         let games = this.games[tableKey];
+        
+        if (!tbody) {
+            console.error(`GameTracker: Could not find tbody element with id ${bodyId}`);
+            return;
+        }
+        if (!emptyDiv) {
+            console.error(`GameTracker: Could not find empty div element with id ${emptyId}`);
+            return;
+        }
 
         if (tableKey === 'waiting') {
             games = [...games].sort((a, b) => {
@@ -698,6 +886,15 @@ class GameTracker {
                 row.draggable = true;
                 row.dataset.gameId = game.id;
                 row.dataset.sourceTable = tableKey;
+                
+                // Add banner image background if available
+                if (game.bannerImage) {
+                    row.style.backgroundImage = `url(${game.bannerImage})`;
+                    row.style.backgroundSize = 'cover';
+                    row.style.backgroundPosition = 'center';
+                    row.style.backgroundRepeat = 'no-repeat';
+                    row.classList.add('has-banner');
+                }
                 
                 row.addEventListener('dragstart', (e) => this.handleDragStart(e));
                 row.addEventListener('dragend', (e) => this.handleDragEnd(e));
@@ -773,7 +970,19 @@ class GameTracker {
     }
 
     exportData() {
-        const dataStr = JSON.stringify(this.games, null, 2);
+        // Get reviews data from localStorage
+        const reviewsData = localStorage.getItem('gameReviews');
+        const reviews = reviewsData ? JSON.parse(reviewsData) : [];
+        
+        // Combine games and reviews data
+        const fullData = {
+            games: this.games,
+            reviews: reviews,
+            exportDate: new Date().toISOString(),
+            version: '1.1' // Version for future compatibility
+        };
+        
+        const dataStr = JSON.stringify(fullData, null, 2);
         const dataBlob = new Blob([dataStr], {type: 'application/json'});
         const url = URL.createObjectURL(dataBlob);
         
@@ -788,12 +997,31 @@ class GameTracker {
     importData(jsonData) {
         try {
             const data = JSON.parse(jsonData);
-            if (data.toPlay && data.completed && data.finished) {
+            
+            // Handle new format (with reviews and metadata)
+            if (data.games && data.version) {
+                // New format with games and reviews
+                if (data.games.toPlay && data.games.completed && data.games.finished) {
+                    this.games = data.games;
+                    this.saveData();
+                    
+                    // Import reviews if they exist
+                    if (data.reviews && Array.isArray(data.reviews)) {
+                        localStorage.setItem('gameReviews', JSON.stringify(data.reviews));
+                    }
+                    
+                    this.render();
+                    return true;
+                }
+            }
+            // Handle legacy format (games only)
+            else if (data.toPlay && data.completed && data.finished) {
                 this.games = data;
                 this.saveData();
                 this.render();
                 return true;
             }
+            
             return false;
         } catch (error) {
             console.error('Failed to import data:', error);
