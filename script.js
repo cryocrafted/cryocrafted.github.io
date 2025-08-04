@@ -6,7 +6,8 @@ class GameTracker {
             finished: [],
             waiting: []
         };
-        this.currentGameImage = null; // Store uploaded image data
+        this.currentGameImage = null;
+        this.currentBannerData = null;
 
         this.init();
     }
@@ -22,6 +23,7 @@ class GameTracker {
         this.setupSidebar();
         console.log('GameTracker: About to render...');
         this.render();
+        this.updateStorageTracker();
         console.log('GameTracker: Initialization complete');
     }
 
@@ -69,10 +71,31 @@ class GameTracker {
             addBtn.disabled = !gameInput.value.trim();
         });
 
-        // Image upload handling
         imageInput.addEventListener('change', (e) => {
             this.handleImageUpload(e);
         });
+
+        const closePreview = document.getElementById('closePreview');
+        const confirmBanner = document.getElementById('confirmBanner');
+        const cancelBanner = document.getElementById('cancelBanner');
+        const posX = document.getElementById('posX');
+        const posY = document.getElementById('posY');
+
+        if (closePreview) {
+            closePreview.addEventListener('click', () => this.closeBannerPreview());
+        }
+        if (confirmBanner) {
+            confirmBanner.addEventListener('click', () => this.confirmBannerImage());
+        }
+        if (cancelBanner) {
+            cancelBanner.addEventListener('click', () => this.closeBannerPreview());
+        }
+        if (posX) {
+            posX.addEventListener('input', (e) => this.updateBannerPreview(e.target.value, 'x'));
+        }
+        if (posY) {
+            posY.addEventListener('input', (e) => this.updateBannerPreview(e.target.value, 'y'));
+        }
 
         addBtn.disabled = !gameInput.value.trim();
     }
@@ -90,7 +113,6 @@ class GameTracker {
             mainContent.classList.toggle('shifted');
         });
 
-        // Close sidebar when clicking outside (on mobile)
         document.addEventListener('click', (event) => {
             if (window.innerWidth <= 768) {
                 if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) {
@@ -101,7 +123,6 @@ class GameTracker {
             }
         });
 
-        // Close sidebar on window resize if needed
         window.addEventListener('resize', () => {
             if (window.innerWidth > 768) {
                 sidebar.classList.remove('open');
@@ -123,16 +144,6 @@ class GameTracker {
             return;
         }
 
-        // Check file size (max 2MB)
-        if (file.size > 2 * 1024 * 1024) {
-            imageStatus.textContent = 'Image too large';
-            imageStatus.className = 'image-status error';
-            this.currentGameImage = null;
-            imageBtn.classList.remove('has-image');
-            return;
-        }
-
-        // Check if it's an image
         if (!file.type.startsWith('image/')) {
             imageStatus.textContent = 'Not an image';
             imageStatus.className = 'image-status error';
@@ -141,20 +152,104 @@ class GameTracker {
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            this.currentGameImage = e.target.result;
-            imageStatus.textContent = file.name;
-            imageStatus.className = 'image-status success';
-            imageBtn.classList.add('has-image');
-        };
-        reader.onerror = () => {
-            imageStatus.textContent = 'Upload failed';
-            imageStatus.className = 'image-status error';
-            this.currentGameImage = null;
-            imageBtn.classList.remove('has-image');
-        };
-        reader.readAsDataURL(file);
+        imageStatus.textContent = 'Compressing...';
+        imageStatus.className = 'image-status processing';
+        
+        this.compressImage(file)
+            .then(compressionResult => {
+                const estimatedSize = (compressionResult.dataUrl.length * 0.75);
+                
+                if (estimatedSize > 2 * 1024 * 1024) {
+                    imageStatus.textContent = 'Still too large after compression';
+                    imageStatus.className = 'image-status error';
+                    this.currentGameImage = null;
+                    imageBtn.classList.remove('has-image');
+                    return;
+                }
+                
+                this.currentBannerData = {
+                    imageUrl: compressionResult.dataUrl,
+                    positionX: 50,
+                    positionY: 50,
+                    originalSizeKB: compressionResult.originalSizeKB,
+                    compressedSizeKB: compressionResult.compressedSizeKB,
+                    savings: compressionResult.savings
+                };
+                
+                this.showBannerPreview(compressionResult.dataUrl);
+            })
+            .catch(error => {
+                console.error('Image compression failed:', error);
+                imageStatus.textContent = 'Compression failed';
+                imageStatus.className = 'image-status error';
+                this.currentGameImage = null;
+                imageBtn.classList.remove('has-image');
+            });
+    }
+
+    async compressImage(file, maxWidth = 1920, maxHeight = 1080, quality = 0.8) {
+        return new Promise((resolve, reject) => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            const originalSizeKB = file.size / 1024;
+            
+            img.onload = () => {
+                let { width, height } = img;
+                
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const tryWebP = () => {
+                    const webpDataUrl = canvas.toDataURL('image/webp', quality);
+                    if (webpDataUrl.startsWith('data:image/webp')) {
+                        const compressedSizeKB = (webpDataUrl.length * 0.75) / 1024;
+                        const savings = ((originalSizeKB - compressedSizeKB) / originalSizeKB * 100).toFixed(1);
+                        resolve({
+                            dataUrl: webpDataUrl,
+                            originalSizeKB: originalSizeKB.toFixed(1),
+                            compressedSizeKB: compressedSizeKB.toFixed(1),
+                            savings: savings
+                        });
+                    } else {
+                        const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
+                        const compressedSizeKB = (jpegDataUrl.length * 0.75) / 1024;
+                        const savings = ((originalSizeKB - compressedSizeKB) / originalSizeKB * 100).toFixed(1);
+                        resolve({
+                            dataUrl: jpegDataUrl,
+                            originalSizeKB: originalSizeKB.toFixed(1),
+                            compressedSizeKB: compressedSizeKB.toFixed(1),
+                            savings: savings
+                        });
+                    }
+                };
+                
+                try {
+                    tryWebP();
+                } catch (error) {
+                    const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
+                    const compressedSizeKB = (jpegDataUrl.length * 0.75) / 1024;
+                    const savings = ((originalSizeKB - compressedSizeKB) / originalSizeKB * 100).toFixed(1);
+                    resolve({
+                        dataUrl: jpegDataUrl,
+                        originalSizeKB: originalSizeKB.toFixed(1),
+                        compressedSizeKB: compressedSizeKB.toFixed(1),
+                        savings: savings
+                    });
+                }
+            };
+            
+            img.onerror = () => reject(new Error('Failed to load image'));
+            img.src = URL.createObjectURL(file);
+        });
     }
 
     showHelp() {
@@ -177,7 +272,6 @@ class GameTracker {
             }
         });
         
-        // Close on Escape key
         const handleEscape = (e) => {
             if (e.key === 'Escape' && helpModal.classList.contains('show')) {
                 closeHelp();
@@ -242,15 +336,19 @@ class GameTracker {
         });
     }
 
-    showConfirm(title, message, onConfirm, onCancel = null) {
+    showConfirm(title, message, onConfirm, onCancel = null, confirmText = 'OK', cancelText = 'Cancel') {
         const modal = document.getElementById('customModal');
         const modalTitle = document.getElementById('modalTitle');
         const modalMessage = document.getElementById('modalMessage');
         const modalCancel = document.getElementById('modalCancel');
+        const modalConfirm = document.getElementById('modalConfirm');
 
         modalTitle.textContent = title;
         modalMessage.textContent = message;
         modalCancel.style.display = 'inline-block';
+        
+        modalConfirm.textContent = confirmText;
+        modalCancel.textContent = cancelText;
 
         this.modalCallback = { onConfirm, onCancel };
         modal.classList.add('show');
@@ -307,7 +405,7 @@ class GameTracker {
             name: gameName,
             dateAdded: new Date().toISOString(),
             completion: 0,
-            bannerImage: this.currentGameImage // Add banner image data
+            bannerImage: this.currentGameImage
         };
 
         if (targetTable === 'waiting') {
@@ -352,6 +450,317 @@ class GameTracker {
                 this.render();
             }
         );
+    }
+
+    changeBanner(gameId, fromTable) {
+        const game = this.games[fromTable].find(g => g.id === gameId);
+        if (!game) return;
+
+        if (game.bannerImage) {
+            this.showConfirm(
+                'Banner Options',
+                'Would you like to change the current banner or remove it entirely?',
+                () => {
+                    this.selectNewBanner(game, fromTable);
+                },
+                () => {
+                    game.bannerImage = null;
+                    this.saveData();
+                    this.render();
+                    this.showAlert('Banner Removed', 'Banner has been removed from this game.');
+                },
+                'Change Banner',
+                'Remove Banner'
+            );
+        } else {
+            this.selectNewBanner(game, fromTable);
+        }
+    }
+
+    selectNewBanner(game, fromTable) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                this.showAlert('Invalid File', 'Please select an image file.');
+                return;
+            }
+
+            this.showAlert('Processing', 'Compressing image, please wait...');
+            
+            this.compressImage(file)
+                .then(compressionResult => {
+                    const estimatedSize = (compressionResult.dataUrl.length * 0.75);
+                    
+                    if (estimatedSize > 2 * 1024 * 1024) {
+                        this.closeModal(false);
+                        this.showAlert('Image Too Large', 'Image is still too large after compression. Please try a smaller image.');
+                        return;
+                    }
+
+                    const existingBanner = game.bannerImage;
+                    this.currentBannerData = {
+                        imageUrl: compressionResult.dataUrl,
+                        positionX: existingBanner && typeof existingBanner === 'object' ? existingBanner.positionX : 50,
+                        positionY: existingBanner && typeof existingBanner === 'object' ? existingBanner.positionY : 50,
+                        game: game,
+                        fromTable: fromTable,
+                        originalSizeKB: compressionResult.originalSizeKB,
+                        compressedSizeKB: compressionResult.compressedSizeKB,
+                        savings: compressionResult.savings
+                    };
+
+                    this.closeModal(false);
+                    this.showBannerPreview(compressionResult.dataUrl);
+                })
+                .catch(error => {
+                    console.error('Image compression failed:', error);
+                    this.showAlert('Compression Failed', 'Failed to compress the image. Please try a different image.');
+                });
+            
+            document.body.removeChild(fileInput);
+        });
+
+        document.body.appendChild(fileInput);
+        fileInput.click();
+    }
+
+    showBannerPreview(imageUrl) {
+        const preview = document.getElementById('bannerPreview');
+        const previewBanner = document.getElementById('previewBanner');
+        const placeholder = document.querySelector('.preview-placeholder');
+        const gameContent = document.querySelector('.preview-game-content');
+        
+        if (preview && previewBanner && this.currentBannerData) {
+            if (placeholder) placeholder.style.display = 'none';
+            if (gameContent) gameContent.style.display = 'block';
+            
+            this.populatePreviewWithGameData();
+            
+            const { positionX, positionY } = this.currentBannerData;
+            previewBanner.style.backgroundImage = `url(${imageUrl})`;
+            previewBanner.style.backgroundPosition = `${positionX}% ${positionY}%`;
+            previewBanner.style.backgroundSize = 'cover';
+            
+            const posXSlider = document.getElementById('posX');
+            const posYSlider = document.getElementById('posY');
+            const posXValue = document.getElementById('posXValue');
+            const posYValue = document.getElementById('posYValue');
+            
+            if (posXSlider) posXSlider.value = positionX;
+            if (posYSlider) posYSlider.value = positionY;
+            if (posXValue) posXValue.textContent = positionX + '%';
+            if (posYValue) posYValue.textContent = positionY + '%';
+            
+            preview.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    updateBannerPreview(value, type) {
+        const previewBanner = document.getElementById('previewBanner');
+        const posXValue = document.getElementById('posXValue');
+        const posYValue = document.getElementById('posYValue');
+        
+        if (!previewBanner || !this.currentBannerData) return;
+        
+        switch (type) {
+            case 'x':
+                this.currentBannerData.positionX = parseInt(value);
+                if (posXValue) posXValue.textContent = value + '%';
+                break;
+            case 'y':
+                this.currentBannerData.positionY = parseInt(value);
+                if (posYValue) posYValue.textContent = value + '%';
+                break;
+        }
+        
+        const { positionX, positionY } = this.currentBannerData;
+        previewBanner.style.backgroundPosition = `${positionX}% ${positionY}%`;
+        previewBanner.style.backgroundSize = 'cover';
+    }
+
+    populatePreviewWithGameData() {
+        if (!this.currentBannerData || !this.currentBannerData.game) return;
+        
+        const game = this.currentBannerData.game;
+        const tableKey = this.currentBannerData.fromTable;
+        
+        const gameIndex = this.games[tableKey].findIndex(g => g.id === game.id);
+        const position = gameIndex + 1;
+        
+        const orderCol = document.querySelector('.preview-order-col');
+        if (orderCol) {
+            orderCol.textContent = this.currentBannerData.fromTable === 'toPlay' ? position : '';
+        }
+        
+        const gameName = document.querySelector('.preview-game-name');
+        if (gameName) {
+            gameName.textContent = game.name;
+        }
+        
+        const completionContent = document.querySelector('.preview-completion-content');
+        if (completionContent) {
+            completionContent.innerHTML = '';
+            
+            if (tableKey === 'waiting') {
+                if (game.releaseDate) {
+                    const countdown = document.createElement('div');
+                    countdown.className = 'release-countdown';
+                    
+                    const releaseInfo = this.calculateDaysUntilRelease(game.releaseDate);
+                    
+                    if (releaseInfo.isUnknown) {
+                        countdown.textContent = 'Unknown';
+                        countdown.classList.add('unknown');
+                    } else if (releaseInfo.isYearOnly) {
+                        if (releaseInfo.yearsUntil === 0) {
+                            countdown.textContent = 'Soon™';
+                            countdown.classList.add('soon', 'soon-tm');
+                        } else if (releaseInfo.yearsUntil < 0) {
+                            const yearsPast = Math.abs(releaseInfo.yearsUntil);
+                            countdown.textContent = yearsPast === 1 ? 'Released last year' : `Released ${yearsPast} years ago`;
+                            countdown.classList.add('overdue');
+                        } else {
+                            const yearsAway = releaseInfo.yearsUntil;
+                            countdown.textContent = yearsAway === 1 ? 'a year, or less?' : `in ${yearsAway} years`;
+                            countdown.classList.add('future-year');
+                        }
+                    } else {
+                        const daysUntil = releaseInfo.days;
+                        if (daysUntil < 0) {
+                            countdown.textContent = `Released ${Math.abs(daysUntil)} days ago`;
+                            countdown.classList.add('overdue');
+                        } else if (daysUntil === 0) {
+                            countdown.textContent = 'Releases today!';
+                            countdown.classList.add('soon');
+                        } else if (daysUntil <= 7) {
+                            countdown.textContent = `${daysUntil} days left`;
+                            countdown.classList.add('soon');
+                        } else {
+                            countdown.textContent = `${daysUntil} days left`;
+                        }
+                    }
+                    
+                    completionContent.appendChild(countdown);
+                } else {
+                    const addDateSpan = document.createElement('span');
+                    addDateSpan.textContent = 'Add date';
+                    addDateSpan.style.fontSize = '10px';
+                    addDateSpan.style.opacity = '0.7';
+                    completionContent.appendChild(addDateSpan);
+                }
+            } else {
+                const completionInput = document.createElement('input');
+                completionInput.type = 'number';
+                completionInput.className = 'completion-input';
+                completionInput.value = game.completion || 0;
+                completionInput.readOnly = true;
+                completionInput.style.width = '30px';
+                completionInput.style.height = '16px';
+                completionInput.style.fontSize = '10px';
+                completionInput.style.textAlign = 'center';
+                completionInput.style.border = 'none';
+                completionInput.style.background = 'rgba(255, 255, 255, 0.1)';
+                completionInput.style.color = '#ffffff';
+                completionInput.style.borderRadius = '2px';
+                
+                const percentLabel = document.createElement('span');
+                percentLabel.textContent = '%';
+                percentLabel.className = 'completion-display';
+                percentLabel.style.marginLeft = '2px';
+                
+                completionContent.appendChild(completionInput);
+                completionContent.appendChild(percentLabel);
+            }
+        }
+        
+        const actionButtons = document.querySelector('.preview-action-buttons');
+        if (actionButtons) {
+            actionButtons.innerHTML = '';
+            
+            const bannerBtn = document.createElement('button');
+            bannerBtn.innerHTML = game.bannerImage ? '🖼️' : '📷';
+            bannerBtn.title = game.bannerImage ? 'Change banner' : 'Add banner';
+            actionButtons.appendChild(bannerBtn);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.title = 'Delete game';
+            actionButtons.appendChild(deleteBtn);
+        }
+    }
+
+
+
+    confirmBannerImage() {
+        if (!this.currentBannerData) return;
+        
+        const { imageUrl, positionX, positionY, game, fromTable } = this.currentBannerData;
+        
+        const bannerData = {
+            imageUrl: imageUrl,
+            positionX: positionX,
+            positionY: positionY
+        };
+        
+        if (game && fromTable) {
+            game.bannerImage = bannerData;
+            this.saveData();
+            this.render();
+            
+            const compressionMessage = this.currentBannerData.originalSizeKB && this.currentBannerData.compressedSizeKB && this.currentBannerData.savings
+                ? `Banner has been updated with your positioning preferences!\n\nCompression: ${this.currentBannerData.originalSizeKB}KB → ${this.currentBannerData.compressedSizeKB}KB (${this.currentBannerData.savings}% smaller)`
+                : 'Banner has been updated with your positioning preferences!';
+            
+            this.showAlert('Banner Updated', compressionMessage);
+        } else {
+            this.currentGameImage = bannerData;
+            const imageStatus = document.getElementById('imageStatus');
+            const imageBtn = document.getElementById('imageBtn');
+            
+            if (imageStatus) {
+                const statusText = this.currentBannerData.originalSizeKB && this.currentBannerData.compressedSizeKB && this.currentBannerData.savings
+                    ? `Banner ready (${this.currentBannerData.originalSizeKB}KB → ${this.currentBannerData.compressedSizeKB}KB, ${this.currentBannerData.savings}% smaller)`
+                    : 'Banner ready';
+                imageStatus.textContent = statusText;
+                imageStatus.className = 'image-status success';
+            }
+            if (imageBtn) {
+                imageBtn.classList.add('has-image');
+            }
+        }
+        
+        this.closeBannerPreview();
+    }
+
+    closeBannerPreview() {
+        const preview = document.getElementById('bannerPreview');
+        const previewBanner = document.getElementById('previewBanner');
+        const placeholder = document.querySelector('.preview-placeholder');
+        const gameContent = document.querySelector('.preview-game-content');
+        
+        if (preview) {
+            preview.style.display = 'none';
+        }
+        if (placeholder) {
+            placeholder.style.display = 'block';
+        }
+        if (gameContent) {
+            gameContent.style.display = 'none';
+        }
+        if (previewBanner) {
+            previewBanner.style.backgroundImage = 'none';
+        }
+        
+        document.body.style.overflow = '';
+        this.currentBannerData = null;
     }
 
     updateGameCompletion(gameId, table, completion) {
@@ -549,6 +958,13 @@ class GameTracker {
     createActionButtons(game, table) {
         const buttonsDiv = document.createElement('div');
         buttonsDiv.className = 'action-buttons';
+
+        const bannerBtn = document.createElement('button');
+        bannerBtn.className = 'btn btn-banner';
+        bannerBtn.innerHTML = game.bannerImage ? '🖼️' : '📷';
+        bannerBtn.title = game.bannerImage ? 'Change banner' : 'Add banner';
+        bannerBtn.onclick = () => this.changeBanner(game.id, table);
+        buttonsDiv.appendChild(bannerBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.className = 'btn btn-delete';
@@ -887,11 +1303,16 @@ class GameTracker {
                 row.dataset.gameId = game.id;
                 row.dataset.sourceTable = tableKey;
                 
-                // Add banner image background if available
                 if (game.bannerImage) {
-                    row.style.backgroundImage = `url(${game.bannerImage})`;
-                    row.style.backgroundSize = 'cover';
-                    row.style.backgroundPosition = 'center';
+                    if (typeof game.bannerImage === 'string') {
+                        row.style.backgroundImage = `url(${game.bannerImage})`;
+                        row.style.backgroundSize = 'cover';
+                        row.style.backgroundPosition = 'center';
+                    } else {
+                        row.style.backgroundImage = `url(${game.bannerImage.imageUrl})`;
+                        row.style.backgroundSize = 'cover';
+                        row.style.backgroundPosition = `${game.bannerImage.positionX || 50}% ${game.bannerImage.positionY || 50}%`;
+                    }
                     row.style.backgroundRepeat = 'no-repeat';
                     row.classList.add('has-banner');
                 }
@@ -932,8 +1353,10 @@ class GameTracker {
     saveData() {
         try {
             localStorage.setItem('gameTracker', JSON.stringify(this.games));
+            this.updateStorageTracker();
         } catch (error) {
             console.error('Failed to save data:', error);
+            this.updateStorageTracker();
         }
     }
 
@@ -970,16 +1393,14 @@ class GameTracker {
     }
 
     exportData() {
-        // Get reviews data from localStorage
         const reviewsData = localStorage.getItem('gameReviews');
         const reviews = reviewsData ? JSON.parse(reviewsData) : [];
         
-        // Combine games and reviews data
         const fullData = {
             games: this.games,
             reviews: reviews,
             exportDate: new Date().toISOString(),
-            version: '1.1' // Version for future compatibility
+            version: '1.1'
         };
         
         const dataStr = JSON.stringify(fullData, null, 2);
@@ -998,27 +1419,25 @@ class GameTracker {
         try {
             const data = JSON.parse(jsonData);
             
-            // Handle new format (with reviews and metadata)
             if (data.games && data.version) {
-                // New format with games and reviews
                 if (data.games.toPlay && data.games.completed && data.games.finished) {
                     this.games = data.games;
                     this.saveData();
                     
-                    // Import reviews if they exist
                     if (data.reviews && Array.isArray(data.reviews)) {
                         localStorage.setItem('gameReviews', JSON.stringify(data.reviews));
                     }
                     
                     this.render();
+                    this.updateStorageTracker();
                     return true;
                 }
-            }
-            // Handle legacy format (games only)
+            } 
             else if (data.toPlay && data.completed && data.finished) {
                 this.games = data;
                 this.saveData();
                 this.render();
+                this.updateStorageTracker();
                 return true;
             }
             
@@ -1037,6 +1456,54 @@ class GameTracker {
             waiting: this.games.waiting.length,
             total: this.games.toPlay.length + this.games.completed.length + this.games.finished.length + this.games.waiting.length
         };
+    }
+
+    calculateLocalStorageSize() {
+        let totalSize = 0;
+        for (let key in localStorage) {
+            if (localStorage.hasOwnProperty(key)) {
+                const value = localStorage.getItem(key);
+                if (value) {
+                    totalSize += key.length * 2 + value.length * 2;
+                }
+            }
+        }
+        return totalSize;
+    }
+
+    formatBytes(bytes) {
+        if (bytes === 0) return '0.0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    updateStorageTracker() {
+        const storageUsedElement = document.getElementById('storageUsed');
+        const storageProgressElement = document.getElementById('storageProgress');
+        
+        if (!storageUsedElement || !storageProgressElement) {
+            return;
+        }
+
+        const usedBytes = this.calculateLocalStorageSize();
+        const maxBytes = 10 * 1024 * 1024;
+        const percentUsed = (usedBytes / maxBytes) * 100;
+
+        storageUsedElement.textContent = this.formatBytes(usedBytes);
+        storageProgressElement.style.width = `${Math.min(percentUsed, 100)}%`;
+
+        storageProgressElement.classList.remove('warning', 'critical');
+        if (percentUsed >= 90) {
+            storageProgressElement.classList.add('critical');
+        } else if (percentUsed >= 75) {
+            storageProgressElement.classList.add('warning');
+        }
+
+        if (percentUsed >= 95) {
+            console.warn(`localStorage usage is at ${Math.round(percentUsed)}% (${this.formatBytes(usedBytes)} / 10MB). Consider exporting your data.`);
+        }
     }
 }
 

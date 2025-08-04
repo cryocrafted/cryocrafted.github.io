@@ -10,8 +10,7 @@
 <body>
     <div id="sidebar" class="sidebar">
         <div class="sidebar-header">
-            <img src="favicon.png" alt="Logo" class="sidebar-logo">
-            <h3>POTUDE</h3>
+            <img src="POTUDE.png" alt="POTUDE" class="sidebar-logo">
         </div>
         <nav class="sidebar-nav">
             <a href="index.html" class="sidebar-link active">
@@ -33,9 +32,7 @@
         <div class="container">
         <header>
             <h1>
-                <img src="favicon.png" alt="Logo" class="title-icon title-icon-left">
                 <span id="titleText">Play Order Tracker Ultimate Deluxe Edition</span>
-                <img src="favicon.png" alt="Logo" class="title-icon title-icon-right">
             </h1>
             <div class="add-game-section">
                 <button id="helpBtn" class="help-btn" title="What am I doing?">?</button>
@@ -51,10 +48,63 @@
                     <button id="imageBtn" class="image-upload-btn">Add Banner</button>
                     <span id="imageStatus" class="image-status"></span>
                 </div>
+                
+                <div id="bannerPreview" class="banner-preview" style="display: none;">
+                    <div class="preview-header">
+                        <h4>Banner Preview</h4>
+                        <button id="closePreview" class="preview-close">×</button>
+                    </div>
+                    <div class="preview-container">
+                        <div id="previewBanner" class="preview-banner">
+                            <div class="preview-placeholder">Game Name</div>
+                            <div class="preview-game-content">
+                                <div class="preview-game-row">
+                                    <div class="preview-order-col"></div>
+                                    <div class="preview-game-col">
+                                        <div class="preview-game-name"></div>
+                                    </div>
+                                    <div class="preview-completion-col">
+                                        <div class="preview-completion-content"></div>
+                                    </div>
+                                    <div class="preview-actions-col">
+                                        <div class="preview-action-buttons"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="position-controls">
+                        <div class="control-group">
+                            <label>Horizontal Position:</label>
+                            <input type="range" id="posX" min="0" max="100" value="50" class="position-slider">
+                            <span id="posXValue">50%</span>
+                        </div>
+                        <div class="control-group">
+                            <label>Vertical Position:</label>
+                            <input type="range" id="posY" min="0" max="100" value="50" class="position-slider">
+                            <span id="posYValue">50%</span>
+                        </div>
+                    </div>
+                    <div class="preview-actions">
+                        <button id="confirmBanner" class="btn btn-primary">Confirm Banner</button>
+                        <button id="cancelBanner" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
                 <button id="addGameBtn">Add Game</button>
                 <button id="exportBtn">Export</button>
                 <button id="importBtn">Import</button>
                 <input type="file" id="importFile" accept=".json" style="display: none;">
+            </div>
+            
+            <div class="storage-tracker" data-tooltip="As I don't care about your data, we use localStorage. There's limits though, annoyingly. I do some fancy things to reduce image sizes though.">
+                <div class="storage-info">
+                    <span class="storage-text">Storage Usage: </span>
+                    <span id="storageUsed">0.0 KB</span>
+                    <span class="storage-text"> / 10 MB</span>
+                </div>
+                <div class="storage-bar">
+                    <div id="storageProgress" class="storage-progress"></div>
+                </div>
             </div>
         </header>
 
@@ -142,7 +192,7 @@
         </main>
 
         <footer>
-            <p>I'm saving it locally in your browser cos that's easier with GitHub innit.</p>
+            <p>Coded by Ari with suggestions and ideas from Cryo.</p>
         </footer>
     </div>
 
@@ -167,7 +217,9 @@
                 <h3>What am I doing?</h3>
             </div>
             <div class="modal-body">
-                <p>Welcome to POTUDE. It's a neat little tracker all stored locally to you as I do not care about your data at all. Enter a game name, choose a section to place it in and if you want, you can add a banner too to make it even prettier. (2MB file limit.)</p>
+                <p>Welcome to POTUDE. It's a neat little tracker all stored locally to you as I do not care about your data at all. Enter a game name, choose a section to place it in and if you want, you can add a banner too to make it even prettier.</p>
+                <br>
+                <p>Images are automatically compressed to WebP/JPEG format and resized to save localStorage space. No quality loss you'll notice, but your localStorage will be grateful.</p>
                 <br>
                 <p>On the left, you have a sidebar with this page and a reviews page if you want to review the games you've added to your finished tab. (You can click and drag games around where you need them!)</p>
                 <br>
